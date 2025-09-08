@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  background-color: hsl(215, 30%, 95%);
+  color: hsl(210, 30%, 15%);
+}
+
+.miniapp-container {
+  max-width: 428px;
+  margin: 0 auto;
+  min-height: 100vh;
+  background: hsl(0, 0%, 100%);
+}
