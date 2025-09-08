@@ -9,6 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@coinbase/onchainkit": "^0.31.0",
+    "@coinbase/wallet-sdk": "^4.0.0",
     "@dynamic-labs/ethereum": "^2.0.0",
     "@dynamic-labs/sdk-react-core": "^2.0.0",
     "@rainbow-me/rainbowkit": "^2.2.8",

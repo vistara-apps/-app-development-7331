@@ -5,8 +5,11 @@ import StepIndicator from './components/StepIndicator';
 import SearchInput from './components/SearchInput';
 import LegalTermDisplay from './components/LegalTermDisplay';
 import PaymentModal from './components/PaymentModal';
+import ChatAgent from './components/ChatAgent';
 import { checklists, scenarioGuides, legalTerms, alerts } from './data/mockData';
-import { ArrowLeft, Star, BookOpen, AlertTriangle, Search } from 'lucide-react';
+import { useMiniKit } from './hooks/useMiniKit';
+import { useFarcaster } from './hooks/useFarcaster';
+import { ArrowLeft, Star, BookOpen, AlertTriangle, Search, MessageCircle, Share2 } from 'lucide-react';
 
 const App = () => {
   const [currentView, setCurrentView] = useState('home');
@@ -15,6 +18,11 @@ const App = () => {
   const [purchasedItems, setPurchasedItems] = useState(new Set());
   const [paymentModal, setPaymentModal] = useState({ isOpen: false, item: null });
   const [showOnboarding, setShowOnboarding] = useState(true);
+  const [chatOpen, setChatOpen] = useState(false);
+
+  // Initialize MiniKit and Farcaster hooks
+  const { isInMiniApp, saveFrame, shareContent, sendNotification } = useMiniKit();
+  const { shareLegalContent } = useFarcaster();
 
   // Filter content based on search
   const filteredChecklists = checklists.filter(item =>
@@ -42,11 +50,65 @@ const App = () => {
     setCurrentView('detail');
   };
 
-  const handlePurchaseSuccess = () => {
+  const handlePurchaseSuccess = async () => {
     if (paymentModal.item) {
       setPurchasedItems(prev => new Set([...prev, paymentModal.item.id]));
       setSelectedItem(paymentModal.item);
       setCurrentView('detail');
+      
+      // Show save frame prompt for premium content
+      if (isInMiniApp) {
+        try {
+          await saveFrame();
+          await sendNotification({
+            title: 'Premium Content Unlocked!',
+            body: `You now have access to "${paymentModal.item.title}". Save this frame for quick access.`,
+            icon: '/icon-192x192.png'
+          });
+        } catch (error) {
+          console.log('Frame save or notification failed:', error);
+        }
+      }
+    }
+  };
+
+  // Handle sharing content
+  const handleShare = async (item) => {
+    try {
+      if (isInMiniApp) {
+        await shareContent({
+          title: `RightCheck: ${item.title}`,
+          text: `Check out this legal guide: ${item.description}`,
+          url: window.location.href
+        });
+      } else {
+        // Fallback for web
+        const shareData = await shareLegalContent(item);
+        if (navigator.share) {
+          await navigator.share({
+            title: `RightCheck: ${item.title}`,
+            text: shareData.text,
+            url: window.location.href
+          });
+        } else {
+          // Copy to clipboard fallback
+          await navigator.clipboard.writeText(shareData.text);
+          alert('Content copied to clipboard!');
+        }
+      }
+    } catch (error) {
+      console.error('Share failed:', error);
+    }
+  };
+
+  // Handle chat resource clicks
+  const handleChatResourceClick = (resourceId) => {
+    const item = checklists.find(c => c.id === resourceId) || 
+                 scenarioGuides.find(g => g.id === resourceId);
+    
+    if (item) {
+      const type = checklists.find(c => c.id === resourceId) ? 'checklist' : 'guide';
+      handleItemClick(item, type);
     }
   };
 
@@ -159,17 +221,26 @@ const App = () => {
 
     return (
       <div className="p-4 space-y-6">
-        <div className="flex items-center space-x-3 mb-4">
-          <button
-            onClick={() => setCurrentView('home')}
-            className="p-2 hover:bg-gray-100 rounded-full transition-colors duration-200"
-          >
-            <ArrowLeft className="w-5 h-5 text-text-secondary" />
-          </button>
-          <div>
-            <h1 className="text-xl font-bold text-text-primary">{selectedItem.title}</h1>
-            <p className="text-sm text-text-secondary">{selectedItem.category}</p>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={() => setCurrentView('home')}
+              className="p-2 hover:bg-gray-100 rounded-full transition-colors duration-200"
+            >
+              <ArrowLeft className="w-5 h-5 text-text-secondary" />
+            </button>
+            <div>
+              <h1 className="text-xl font-bold text-text-primary">{selectedItem.title}</h1>
+              <p className="text-sm text-text-secondary">{selectedItem.category}</p>
+            </div>
           </div>
+          <button
+            onClick={() => handleShare(selectedItem)}
+            className="p-2 hover:bg-gray-100 rounded-full transition-colors duration-200"
+            title="Share this guide"
+          >
+            <Share2 className="w-5 h-5 text-text-secondary" />
+          </button>
         </div>
 
         {selectedItem.type === 'checklist' && (
@@ -300,6 +371,13 @@ const App = () => {
       {/* Navigation shortcuts for desktop */}
       <div className="hidden sm:flex fixed bottom-4 right-4 flex-col space-y-2">
         <button
+          onClick={() => setChatOpen(true)}
+          className="bg-accent p-3 rounded-full shadow-card hover:shadow-lg transition-all duration-200"
+          title="Legal Assistant"
+        >
+          <MessageCircle className="w-5 h-5 text-white" />
+        </button>
+        <button
           onClick={() => setCurrentView('glossary')}
           className="bg-surface p-3 rounded-full shadow-card hover:shadow-lg transition-all duration-200"
           title="Legal Glossary"
@@ -315,11 +393,28 @@ const App = () => {
         </button>
       </div>
 
+      {/* Mobile Chat Button */}
+      <div className="fixed bottom-20 right-4 sm:hidden">
+        <button
+          onClick={() => setChatOpen(true)}
+          className="bg-accent p-3 rounded-full shadow-card hover:shadow-lg transition-all duration-200"
+          title="Legal Assistant"
+        >
+          <MessageCircle className="w-5 h-5 text-white" />
+        </button>
+      </div>
+
       <PaymentModal
         isOpen={paymentModal.isOpen}
         onClose={() => setPaymentModal({ isOpen: false, item: null })}
         title={paymentModal.item?.title}
         onSuccess={handlePurchaseSuccess}
+      />
+
+      <ChatAgent
+        isOpen={chatOpen}
+        onClose={() => setChatOpen(false)}
+        onResourceClick={handleChatResourceClick}
       />
     </AppShell>
   );
